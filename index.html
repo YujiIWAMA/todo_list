@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>研究タスク帳</title>
+<meta name="theme-color" content="#FFFFFF">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="タスク帳">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&display=swap" media="print" onload="this.media='all'">
+<style>
+/* Layout: one-column research notebook. Sticky header with view switch; tasks as ruled rows; edit in a bottom sheet. Always light. */
+:root{
+  --bg:#F4F8FC; --surface:#FFFFFF; --ink:#1F2D3A; --muted:#5E6E7C; --line:#DCE6EF;
+  --accent:#2479D0; --accent-ink:#FFFFFF; --accent-soft:#E4F0FC; --mark:#F6B826;
+  --hi:#D9472F; --hi-bg:#FDE7E2; --mid:#B86E00; --mid-bg:#FFF1D2; --lo:#23905E; --lo-bg:#DFF5EA;
+  --scrim:rgba(31,45,58,.35);
+  --f-body:"BIZ UDPGothic","Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP",system-ui,sans-serif;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.6;-webkit-text-size-adjust:100%;-webkit-tap-highlight-color:transparent}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer;background:none;border:0;padding:0}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+.num{font-variant-numeric:tabular-nums;letter-spacing:0}
+.wrap{max-width:720px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+
+header.top{position:sticky;top:0;z-index:5;background:var(--surface);border-bottom:1px solid var(--line);padding-top:env(safe-area-inset-top,0px)}
+header.top .wrap{padding-block:12px 10px;display:flex;flex-direction:column;gap:10px}
+.title-row{display:flex;align-items:center;justify-content:space-between;gap:12px}
+h1{margin:0;font-size:21px;font-weight:700;letter-spacing:.02em;color:var(--accent)}
+.title-side{display:flex;align-items:center;gap:6px}
+.today{color:var(--muted);font-size:12px}
+.icon-btn{width:36px;height:36px;border-radius:8px;color:var(--muted);font-size:20px;line-height:1;display:inline-flex;align-items:center;justify-content:center}
+.icon-btn:active{background:var(--bg)}
+.controls{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.seg{display:inline-flex;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:3px;gap:2px}
+.seg button{padding:6px 12px;border-radius:7px;font-size:13px;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);font-weight:700;box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.switch{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)}
+.switch input{width:16px;height:16px;accent-color:var(--accent)}
+
+.stats{display:flex;gap:18px;padding-block:14px 4px;flex-wrap:wrap}
+.stat{display:flex;align-items:baseline;gap:6px;font-size:12px;color:var(--muted)}
+.stat b{font-size:22px;color:var(--ink);font-weight:700}
+.stat.late b{color:var(--hi)}
+main .wrap{padding-block:6px calc(120px + env(safe-area-inset-bottom,0px))}
+.note{font-size:13px;color:var(--ink);background:var(--mid-bg);border-radius:8px;padding:8px 10px;margin-top:10px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+
+.group-h{display:flex;align-items:baseline;gap:10px;margin:26px 0 8px;font-size:12px;letter-spacing:.12em;color:var(--muted);font-weight:700}
+.group-h .count{letter-spacing:0}
+.group-h .hint{letter-spacing:0;font-weight:400}
+
+ul.tasks{list-style:none;margin:0;padding:0;background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+ul.tasks + ul.tasks{margin-top:8px}
+li.task{display:flex;gap:10px;align-items:flex-start;padding:11px 12px;border-top:1px solid var(--line)}
+li.task:first-child{border-top:0}
+.chk{flex:none;width:26px;height:26px;margin-top:1px;border-radius:50%;border:2px solid var(--muted);position:relative}
+li.s-doing .chk{border-color:var(--accent);background:linear-gradient(90deg,var(--accent) 50%,transparent 50%)}
+li.s-wait .chk{border-color:var(--mid);border-style:dashed}
+li.s-done .chk{border-color:var(--mark);background:var(--mark)}
+li.s-done .chk::after{content:"";position:absolute;left:7px;top:3px;width:6px;height:11px;border:solid #1F2D3A;border-width:0 2.5px 2.5px 0;transform:rotate(45deg)}
+.tbody{flex:1;min-width:0;text-align:left;display:flex;flex-direction:column;gap:3px}
+.ttl{font-size:16px;font-weight:700;overflow-wrap:anywhere}
+li.s-done .ttl{color:var(--muted);font-weight:400;text-decoration:line-through;text-decoration-color:var(--line)}
+.meta{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:13px;color:var(--muted)}
+.chip{display:inline-flex;align-items:center;padding:1px 8px;border-radius:5px;font-size:12px;font-weight:700;line-height:1.6}
+.p-high{background:var(--hi-bg);color:var(--hi)}
+.p-mid{background:var(--mid-bg);color:var(--mid)}
+.p-low{background:var(--lo-bg);color:var(--lo)}
+.st-chip{border:1px solid var(--line);color:var(--muted);font-weight:400}
+.st-doing{border-color:var(--accent);color:var(--accent)}
+.st-wait{border-color:var(--mid);color:var(--mid)}
+.due.late{color:var(--hi);font-weight:700}
+.due.soon{color:var(--mid);font-weight:700}
+.lastnote{font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.proj{margin-top:12px;background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.proj-head{display:flex;align-items:center;gap:10px;padding:12px 12px 8px}
+.proj-head .pname{flex:1;min-width:0;text-align:left;font-weight:700;font-size:16px;display:flex;align-items:center;gap:8px}
+.caret{flex:none;display:inline-block;width:8px;height:8px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(45deg);margin-top:-4px;transition:transform .15s}
+.proj.collapsed .caret{transform:rotate(-45deg);margin-top:0}
+.prog{font-size:13px;color:var(--muted)}
+.more{width:36px;height:32px;border-radius:8px;color:var(--muted);font-size:18px;line-height:1}
+.bar{height:4px;background:var(--line);margin:0 12px 6px;border-radius:2px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--mark)}
+.proj ul.tasks{border:0;border-radius:0;border-top:1px solid var(--line)}
+.proj-foot{display:flex;justify-content:space-between;gap:8px;padding:8px 12px;border-top:1px solid var(--line);flex-wrap:wrap}
+.link{font-size:14px;color:var(--accent);font-weight:700;padding:6px 0}
+.link.muted{color:var(--muted);font-weight:400}
+.proj-edit{display:flex;flex-direction:column;gap:8px;padding:10px 12px 12px;border-top:1px solid var(--line);background:var(--bg)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.row > *{min-width:0}
+.input{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);font-size:16px}
+textarea.input{resize:vertical;min-height:72px}
+.btn{padding:9px 16px;border-radius:8px;font-size:15px;font-weight:700;background:var(--accent);color:var(--accent-ink)}
+.btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+.btn.danger{background:var(--hi);color:#fff}
+.empty{padding:22px 14px;color:var(--muted);font-size:14px;text-align:center}
+.addproj{margin-top:22px;display:flex;flex-direction:column;gap:8px}
+.addproj .row .input{flex:1 1 180px}
+.addproj select.input{flex:0 0 auto;width:auto}
+
+.fab{position:fixed;right:calc(18px + env(safe-area-inset-right,0px));bottom:calc(18px + env(safe-area-inset-bottom,0px));z-index:6;height:52px;padding:0 20px;border-radius:26px;background:var(--accent);color:var(--accent-ink);font-weight:700;font-size:15px;box-shadow:0 6px 18px rgba(0,0,0,.22);display:flex;align-items:center;gap:6px}
+.fab span{font-size:22px;line-height:1;margin-top:-2px}
+
+.scrim{position:fixed;inset:0;background:var(--scrim);z-index:20}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:21;background:var(--surface);border-radius:16px 16px 0 0;max-height:calc(100% - 40px - env(safe-area-inset-top,0px));overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:calc(20px + env(safe-area-inset-bottom,0px));box-shadow:0 -8px 30px rgba(0,0,0,.2)}
+.sheet .wrap{display:flex;flex-direction:column;gap:16px;padding-block:8px 0}
+.grab{width:40px;height:4px;border-radius:2px;background:var(--line);margin:8px auto 0}
+.sheet-head{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.sheet-head h2{margin:0;font-size:13px;letter-spacing:.12em;color:var(--muted)}
+.field{display:flex;flex-direction:column;gap:6px}
+.field > label,.field > .lbl{font-size:12px;color:var(--muted);font-weight:700;letter-spacing:.06em}
+.title-in{font-size:18px;font-weight:700}
+.opts{display:flex;gap:6px;flex-wrap:wrap}
+.opt{padding:7px 12px;border-radius:8px;border:1px solid var(--line);font-size:14px;color:var(--muted)}
+.opt[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft);color:var(--ink);font-weight:700}
+.opt.p-high,.opt.p-mid,.opt.p-low{background:transparent}
+.opt.p-high[aria-pressed="true"]{border-color:var(--hi);background:var(--hi-bg);color:var(--hi)}
+.opt.p-mid[aria-pressed="true"]{border-color:var(--mid);background:var(--mid-bg);color:var(--mid)}
+.opt.p-low[aria-pressed="true"]{border-color:var(--lo);background:var(--lo-bg);color:var(--lo)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media (max-width:420px){.two{grid-template-columns:1fr}}
+.memos{list-style:none;margin:0 0 0 4px;padding:0;display:flex;flex-direction:column;border-left:2px solid var(--line)}
+.memos li{padding:4px 0 10px 12px;position:relative}
+.memos li::before{content:"";position:absolute;left:-6px;top:10px;width:10px;height:10px;border-radius:50%;background:var(--surface);border:2px solid var(--accent)}
+.memos time{font-size:12px;color:var(--muted)}
+.memos p{margin:2px 0 0;white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px}
+.memos .rm{font-size:12px;color:var(--muted);margin-left:8px}
+.sheet-foot{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center;padding-top:8px;border-top:1px solid var(--line)}
+.confirm{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:14px}
+.help{font-size:13px;color:var(--muted);margin:0}
+.backup-card{display:flex;flex-direction:column;gap:10px;padding:12px;border:1px solid var(--line);border-radius:12px}
+.backup-card h3{margin:0;font-size:15px}
+
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom,0px));z-index:30;background:var(--ink);color:var(--surface);padding:8px 14px;border-radius:8px;font-size:14px;max-width:calc(100% - 32px)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <div class="title-row">
+      <h1>研究タスク帳</h1>
+      <div class="title-side">
+        <span class="today num" id="today"></span>
+        <button class="icon-btn" id="menuBtn" data-act="backup" aria-label="バックアップ">⋯</button>
+      </div>
+    </div>
+    <div class="controls">
+      <div class="seg" role="group" aria-label="表示">
+        <button id="v-focus" data-act="view" data-v="focus" aria-pressed="true">優先順</button>
+        <button id="v-proj" data-act="view" data-v="proj" aria-pressed="false">プロジェクト別</button>
+      </div>
+      <label class="switch"><input type="checkbox" id="showDone"> 完了も表示</label>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+    <div class="stats" id="stats"></div>
+    <div id="backupNote" class="note" hidden></div>
+    <div id="content"></div>
+  </div>
+</main>
+
+<button class="fab" id="fab" data-act="new"><span>＋</span>タスク</button>
+<div class="scrim" id="scrim" data-act="close" hidden></div>
+<section class="sheet" id="sheet" hidden aria-modal="true" role="dialog"></section>
+<div class="toast" id="toast" hidden></div>
+<input type="file" id="importFile" accept="application/json,.json" hidden>
+
+<script>
+{
+const STORE_KEY='research-tasks-v1', META_KEY='research-tasks-meta';
+const PR={high:{l:'高',r:0},mid:{l:'中',r:1},low:{l:'低',r:2}};
+const ST={todo:'未着手',doing:'進行中',wait:'待ち',done:'完了'};
+const GROUPS=[{k:'own',l:'岩P'},{k:'others',l:'他研究者P'}];
+const S={projects:{},tasks:{},meta:{},view:'focus',showDone:false,collapsed:{},doneOpen:{},editProj:null,projDel:false,sheet:null,delConfirm:false,pendingImport:null};
+
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid=p=>p+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+const pad=n=>String(n).padStart(2,'0');
+const ymd=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+const todayStr=()=>ymd(new Date());
+const nowIso=()=>new Date().toISOString();
+function daysTo(due){ if(!due) return null; return Math.round((new Date(due+'T00:00:00')-new Date(todayStr()+'T00:00:00'))/864e5) }
+function fmtDate(iso){ const d=new Date(iso); return (d.getMonth()+1)+'/'+d.getDate()+' '+pad(d.getHours())+':'+pad(d.getMinutes()) }
+const md=s=>{const [,m,d]=s.split('-');return (+m)+'/'+(+d)};
+
+let toastT;
+function toast(msg){ const t=$('#toast'); t.textContent=msg; t.hidden=false; clearTimeout(toastT); toastT=setTimeout(()=>t.hidden=true,2600) }
+
+/* ---------- storage (this device only) ---------- */
+function load(){
+  try{ const o=JSON.parse(localStorage.getItem(STORE_KEY)||'null'); if(o){ S.projects=o.projects||{}; S.tasks=o.tasks||{} } }catch(e){}
+  try{ S.meta=JSON.parse(localStorage.getItem(META_KEY)||'{}')||{} }catch(e){ S.meta={} }
+}
+function save(){
+  try{ localStorage.setItem(STORE_KEY,JSON.stringify({projects:S.projects,tasks:S.tasks})) }
+  catch(e){ toast('保存できませんでした。iPhoneの空き容量を確認してください') }
+}
+function saveMeta(){ try{ localStorage.setItem(META_KEY,JSON.stringify(S.meta)) }catch(e){} }
+function put(col,id,data){ S[col][id]=data; save(); afterChange() }
+function patch(col,id,p){ const cur=S[col][id]; if(!cur) return; S[col][id]={...cur,...p}; save(); afterChange() }
+function remove(col,id){ delete S[col][id]; save(); afterChange() }
+function afterChange(){ render(); if(S.sheet&&S.sheet.mode!=='backup') renderSheetParts() }
+
+/* ---------- derived ---------- */
+const projList=()=>Object.entries(S.projects).map(([id,p])=>({id,...p}))
+  .sort((a,b)=>(a.group===b.group?0:(a.group==='own'?-1:1))||(a.order??0)-(b.order??0)||a.name.localeCompare(b.name,'ja'));
+const taskList=()=>Object.entries(S.tasks).map(([id,t])=>({id,...t}));
+function cmpTask(a,b){
+  const ra=PR[a.priority]?.r??3, rb=PR[b.priority]?.r??3; if(ra!==rb) return ra-rb;
+  const da=a.due||'9999', db=b.due||'9999'; if(da!==db) return da<db?-1:1;
+  return (a.order??0)-(b.order??0)||(a.createdAt||'').localeCompare(b.createdAt||'');
+}
+
+/* ---------- main render ---------- */
+function taskRow(t,showProj){
+  const p=S.projects[t.projectId];
+  const notes=t.notes||[]; const last=notes[notes.length-1];
+  const dd=daysTo(t.due);
+  let due='';
+  if(t.due&&t.status!=='done'){
+    const cls=dd<0?'late':(dd<=3?'soon':'');
+    const rel=dd<0?`${-dd}日超過`:(dd===0?'今日':`あと${dd}日`);
+    due=`<span class="due ${cls}"><span class="num">${md(t.due)}</span> ${rel}</span>`;
+  } else if(t.due){ due=`<span class="num">${md(t.due)}</span>` }
+  return `<li class="task s-${esc(t.status)}">
+    <button class="chk" data-act="toggle" data-id="${esc(t.id)}" aria-label="${t.status==='done'?'未完了に戻す':'完了にする'}"></button>
+    <button class="tbody" data-act="open" data-id="${esc(t.id)}">
+      <span class="ttl">${esc(t.title)}</span>
+      <span class="meta">
+        ${PR[t.priority]?`<span class="chip p-${t.priority}">優先 ${PR[t.priority].l}</span>`:''}
+        ${t.status==='doing'||t.status==='wait'?`<span class="chip st-chip st-${t.status}">${ST[t.status]}</span>`:''}
+        ${showProj?(p?`<span>${esc(p.name)}</span>`:`<span>プロジェクト外</span>`):''}
+        ${due}
+        ${notes.length?`<span>メモ <span class="num">${notes.length}</span></span>`:''}
+      </span>
+      ${last&&t.status!=='done'?`<span class="lastnote">${esc(last.text)}</span>`:''}
+    </button>
+  </li>`;
+}
+
+function render(){
+  const tasks=taskList();
+  const open=tasks.filter(t=>t.status!=='done');
+  const late=open.filter(t=>t.due&&daysTo(t.due)<0).length;
+  const doing=open.filter(t=>t.status==='doing').length;
+  const unset=open.filter(t=>!PR[t.priority]).length;
+  $('#stats').innerHTML=`
+    <span class="stat"><b class="num">${open.length}</b>未完了</span>
+    <span class="stat"><b class="num">${doing}</b>進行中</span>
+    <span class="stat ${late?'late':''}"><b class="num">${late}</b>期限切れ</span>
+    <span class="stat"><b class="num">${unset}</b>優先度未設定</span>`;
+  const lb=S.meta.lastBackup; const since=lb?Math.floor((Date.now()-new Date(lb))/864e5):null;
+  const note=$('#backupNote');
+  if(tasks.length&&(since===null||since>=30)){
+    note.hidden=false;
+    note.innerHTML=`<span>${since===null?'まだバックアップがありません':`最後のバックアップから${since}日たちました`}</span><button class="link" data-act="backup">バックアップする</button>`;
+  } else note.hidden=true;
+  $('#v-focus').setAttribute('aria-pressed',S.view==='focus');
+  $('#v-proj').setAttribute('aria-pressed',S.view==='proj');
+  $('#showDone').checked=S.showDone;
+  $('#content').innerHTML=S.view==='focus'?renderFocus(tasks):renderProjects(tasks);
+}
+
+function renderFocus(tasks){
+  if(!tasks.length) return `<p class="empty">まだタスクがありません。右下の「＋ タスク」から追加できます。<br>前のタスク帳から移す場合は、右上の「⋯」からバックアップを読み込んでください。</p>`;
+  const list=tasks.filter(t=>S.showDone||t.status!=='done').sort(cmpTask);
+  if(!list.length) return `<p class="empty">未完了のタスクはありません。</p>`;
+  const sections=[['high','優先度 高',''],['mid','優先度 中',''],['low','優先度 低',''],[null,'優先度 未設定','タップして優先度を決める']];
+  let html='';
+  for(const [k,label,hint] of sections){
+    const items=list.filter(t=>k?t.priority===k:!PR[t.priority]);
+    if(!items.length) continue;
+    html+=`<h2 class="group-h">${label}<span class="count num">${items.length}</span>${hint?`<span class="hint">${hint}</span>`:''}</h2>
+      <ul class="tasks">${items.map(t=>taskRow(t,true)).join('')}</ul>`;
+  }
+  return html;
+}
+
+function projSection(key,name,ts,withMenu,p){
+  const done=ts.filter(t=>t.status==='done');
+  const open=ts.filter(t=>t.status!=='done').sort(cmpTask);
+  const pct=ts.length?Math.round(done.length/ts.length*100):0;
+  const col=!!S.collapsed[key];
+  const showDone=S.showDone||S.doneOpen[key];
+  return `<section class="proj ${col?'collapsed':''}">
+    <div class="proj-head">
+      <button class="pname" data-act="collapse" data-pid="${esc(key)}" aria-expanded="${!col}"><span class="caret"></span><span>${esc(name)}</span></button>
+      <span class="prog num">${done.length}/${ts.length}</span>
+      ${withMenu?`<button class="more" data-act="projmenu" data-pid="${esc(key)}" aria-label="${esc(name)} を編集">⋯</button>`:''}
+    </div>
+    ${withMenu?`<div class="bar" aria-hidden="true"><i style="width:${pct}%"></i></div>`:''}
+    ${withMenu&&S.editProj===key?projEditor(p,ts.length):''}
+    ${col?'':`
+      ${open.length?`<ul class="tasks">${open.map(t=>taskRow(t,false)).join('')}</ul>`:''}
+      ${showDone&&done.length?`<ul class="tasks">${done.map(t=>taskRow(t,false)).join('')}</ul>`:''}
+      <div class="proj-foot">
+        <button class="link" data-act="new" data-pid="${esc(key)}">＋ タスクを追加</button>
+        ${done.length&&!S.showDone?`<button class="link muted" data-act="doneopen" data-pid="${esc(key)}">${S.doneOpen[key]?'完了を隠す':`完了 ${done.length}件を表示`}</button>`:''}
+      </div>`}
+  </section>`;
+}
+
+function renderProjects(tasks){
+  const projs=projList();
+  let html='';
+  for(const g of GROUPS){
+    const ps=projs.filter(p=>(p.group||'own')===g.k);
+    html+=`<h2 class="group-h">${g.l}<span class="count num">${ps.length}</span></h2>`;
+    if(!ps.length){ html+=`<p class="empty">プロジェクトはまだありません。</p>`; continue }
+    for(const p of ps) html+=projSection(p.id,p.name,tasks.filter(t=>t.projectId===p.id),true,p);
+  }
+  const outside=tasks.filter(t=>!S.projects[t.projectId]);
+  html+=`<h2 class="group-h">プロジェクト外<span class="count num">${outside.filter(t=>t.status!=='done').length}</span></h2>`;
+  html+=projSection('_none','どのプロジェクトにも属さないタスク',outside,false);
+  html+=`<div class="addproj">
+    <h2 class="group-h" style="margin-bottom:0">プロジェクトを追加</h2>
+    <div class="row">
+      <input class="input" id="np-name" placeholder="例：科研費 基盤C 申請" maxlength="60">
+      <select class="input" id="np-group" aria-label="区分">${GROUPS.map(g=>`<option value="${g.k}">${g.l}</option>`).join('')}</select>
+      <button class="btn" data-act="addproj">追加</button>
+    </div></div>`;
+  return html;
+}
+
+function projEditor(p,count){
+  return `<div class="proj-edit">
+    <div class="row"><input class="input" id="ep-name" value="${esc(p.name)}" maxlength="60" aria-label="プロジェクト名" style="flex:1 1 180px">
+      <select class="input" id="ep-group" style="width:auto" aria-label="区分">${GROUPS.map(g=>`<option value="${g.k}" ${p.group===g.k?'selected':''}>${g.l}</option>`).join('')}</select></div>
+    <div class="row">
+      <button class="btn" data-act="saveproj" data-pid="${esc(p.id)}">保存</button>
+      <button class="btn ghost" data-act="projmenu" data-pid="${esc(p.id)}">閉じる</button>
+      <span style="flex:1"></span>
+      ${S.projDel?`<span class="confirm">タスク${count}件ごと削除しますか？<button class="btn danger" data-act="delproj" data-pid="${esc(p.id)}">削除する</button><button class="btn ghost" data-act="projdelcancel">やめる</button></span>`
+        :`<button class="link muted" data-act="projdelask">プロジェクトを削除</button>`}
+    </div></div>`;
+}
+
+/* ---------- task sheet ---------- */
+function curTask(){ if(!S.sheet) return null; return S.sheet.mode==='new'?S.sheet.draft:S.tasks[S.sheet.id] }
+function showSheet(html){ $('#sheet').innerHTML=html; $('#scrim').hidden=false; $('#sheet').hidden=false; $('#sheet').scrollTop=0 }
+
+function openSheet(sheet){
+  S.sheet=sheet; S.delConfirm=false;
+  const t=curTask(); if(!t) return;
+  const isNew=sheet.mode==='new';
+  const projs=projList();
+  showSheet(`<div class="grab"></div><div class="wrap">
+    <div class="sheet-head"><h2>${isNew?'新しいタスク':'タスク'}</h2><button class="link" data-act="close">${isNew?'キャンセル':'閉じる'}</button></div>
+    <div class="field"><label for="f-title">内容</label><input class="input title-in" id="f-title" value="${esc(t.title)}" placeholder="例：倫理審査の修正版を提出" maxlength="120"></div>
+    <div class="field"><label for="f-proj">プロジェクト</label><select class="input" id="f-proj"><option value="" ${!S.projects[t.projectId]?'selected':''}>なし（プロジェクト外）</option>${
+      GROUPS.map(g=>`<optgroup label="${g.l}">${projs.filter(p=>(p.group||'own')===g.k).map(p=>`<option value="${esc(p.id)}" ${p.id===t.projectId?'selected':''}>${esc(p.name)}</option>`).join('')}</optgroup>`).join('')}</select></div>
+    <div class="field"><span class="lbl">優先度</span><div class="opts" id="f-prio">
+      ${Object.entries(PR).map(([k,v])=>`<button class="opt p-${k}" data-act="setprio" data-v="${k}">${v.l}</button>`).join('')}
+      <button class="opt" data-act="setprio" data-v="">未設定</button></div></div>
+    <div class="two">
+      <div class="field"><span class="lbl">状態</span><div class="opts" id="f-status">${Object.entries(ST).map(([k,v])=>`<button class="opt" data-act="setstatus" data-v="${k}">${v}</button>`).join('')}</div></div>
+      <div class="field"><label for="f-due">期限</label><input class="input" type="date" id="f-due" value="${esc(t.due||'')}"></div>
+    </div>
+    <div class="field"><label for="f-memo">${isNew?'最初のメモ（任意）':'進捗メモ'}</label>
+      ${isNew?'':'<ul class="memos" id="memoList"></ul>'}
+      <textarea class="input" id="f-memo" placeholder="例：修正版を送付。返信待ち"></textarea>
+      ${isNew?'':'<div class="row"><button class="btn ghost" data-act="addmemo">メモを記録</button></div>'}
+    </div>
+    <div class="sheet-foot" id="sheetFoot"></div>
+  </div>`);
+  renderSheetParts();
+  if(isNew) setTimeout(()=>$('#f-title').focus(),50);
+}
+
+function renderSheetParts(){
+  const t=curTask(); if(!t){ closeSheet(); return }
+  document.querySelectorAll('#f-prio .opt').forEach(b=>b.setAttribute('aria-pressed',(t.priority||'')===b.dataset.v));
+  document.querySelectorAll('#f-status .opt').forEach(b=>b.setAttribute('aria-pressed',t.status===b.dataset.v));
+  const ml=$('#memoList');
+  if(ml){ const n=[...(t.notes||[])].map((m,i)=>({...m,i})).reverse();
+    ml.innerHTML=n.map(m=>`<li><time class="num">${fmtDate(m.at)}</time><button class="rm" data-act="rmmemo" data-i="${m.i}">削除</button><p>${esc(m.text)}</p></li>`).join('');
+    ml.hidden=!n.length }
+  const foot=$('#sheetFoot');
+  if(S.sheet.mode==='new') foot.innerHTML=`<span></span><button class="btn" data-act="create">追加する</button>`;
+  else foot.innerHTML=S.delConfirm
+    ?`<span class="confirm">このタスクを削除しますか？<button class="btn danger" data-act="deltask">削除する</button><button class="btn ghost" data-act="delcancel">やめる</button></span>`
+    :`<button class="link muted" data-act="delask">タスクを削除</button><span class="today">更新 <span class="num">${t.updatedAt?fmtDate(t.updatedAt):'-'}</span></span>`;
+}
+function closeSheet(){ S.sheet=null; S.pendingImport=null; $('#sheet').hidden=true; $('#scrim').hidden=true; $('#sheet').innerHTML='' }
+function editField(p){
+  if(!S.sheet) return;
+  if(S.sheet.mode==='new'){ Object.assign(S.sheet.draft,p); renderSheetParts(); return }
+  patch('tasks',S.sheet.id,{...p,updatedAt:nowIso()});
+}
+
+/* ---------- backup ---------- */
+function backupData(){ return {app:'research-tasks',format:1,exportedAt:nowIso(),projects:S.projects,tasks:S.tasks} }
+function openBackup(){
+  S.sheet={mode:'backup'};
+  const lb=S.meta.lastBackup;
+  const imp=S.pendingImport;
+  showSheet(`<div class="grab"></div><div class="wrap">
+    <div class="sheet-head"><h2>バックアップ</h2><button class="link" data-act="close">閉じる</button></div>
+    <p class="help">データはこのiPhoneの中だけに保存されています。機種変更や故障に備えて、ときどき書き出して「ファイル」アプリ（iCloud Drive）に保存してください。</p>
+    <div class="backup-card">
+      <h3>書き出す</h3>
+      <p class="help">プロジェクト <span class="num">${Object.keys(S.projects).length}</span>件・タスク <span class="num">${Object.keys(S.tasks).length}</span>件。${lb?`前回：<span class="num">${fmtDate(lb)}</span>`:'まだ書き出したことがありません。'}</p>
+      <div class="row"><button class="btn" data-act="export">ファイルに書き出す</button></div>
+    </div>
+    <div class="backup-card">
+      <h3>読み込む</h3>
+      <p class="help">書き出したファイルを選ぶと、今のデータをそのファイルの内容で置き換えます。</p>
+      ${imp?`<div class="confirm">プロジェクト ${imp.pc}件・タスク ${imp.tc}件のデータで置き換えますか？今のデータは消えます。
+        <button class="btn danger" data-act="importok">置き換える</button><button class="btn ghost" data-act="importcancel">やめる</button></div>`
+      :`<div class="row"><button class="btn ghost" data-act="import">ファイルを選ぶ</button></div>`}
+    </div>
+  </div>`);
+}
+async function doExport(){
+  const name=`research-tasks-backup-${todayStr()}.json`;
+  const json=JSON.stringify(backupData(),null,1);
+  const file=new File([json],name,{type:'application/json'});
+  let ok=false;
+  if(navigator.canShare&&navigator.canShare({files:[file]})){
+    try{ await navigator.share({files:[file],title:name}); ok=true }
+    catch(e){ if(e&&e.name==='AbortError'){ toast('書き出しを取り消しました'); return } }
+  }
+  if(!ok){
+    const url=URL.createObjectURL(file); const a=document.createElement('a');
+    a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),4000); ok=true;
+  }
+  S.meta.lastBackup=nowIso(); saveMeta(); render(); if(S.sheet&&S.sheet.mode==='backup') openBackup();
+  toast('書き出しました。「ファイル」に保存してください');
+}
+function validBackup(o){ return o&&typeof o==='object'&&o.projects&&typeof o.projects==='object'&&o.tasks&&typeof o.tasks==='object' }
+$('#importFile').addEventListener('change',async e=>{
+  const f=e.target.files[0]; e.target.value=''; if(!f) return;
+  try{
+    const o=JSON.parse(await f.text());
+    if(!validBackup(o)) throw 0;
+    S.pendingImport={data:o,pc:Object.keys(o.projects).length,tc:Object.keys(o.tasks).length};
+    openBackup();
+  }catch(err){ toast('このファイルは読み込めません。書き出したバックアップを選んでください') }
+});
+
+/* ---------- events ---------- */
+document.addEventListener('click',e=>{
+  const el=e.target.closest('[data-act]'); if(!el) return;
+  const a=el.dataset.act, id=el.dataset.id, pid=el.dataset.pid;
+  switch(a){
+    case 'view': S.view=el.dataset.v; render(); window.scrollTo(0,0); break;
+    case 'toggle': { const t=S.tasks[id]; if(!t) break; patch('tasks',id,{status:t.status==='done'?'todo':'done',updatedAt:nowIso()}); if(t.status!=='done') toast('完了にしました'); break }
+    case 'open': openSheet({mode:'edit',id}); break;
+    case 'close': closeSheet(); break;
+    case 'new': { const projectId=(pid&&S.projects[pid])?pid:'';
+      openSheet({mode:'new',draft:{title:'',projectId,status:'todo',priority:'',due:'',notes:[]}}); break }
+    case 'setprio': editField({priority:el.dataset.v}); break;
+    case 'setstatus': editField({status:el.dataset.v}); break;
+    case 'addmemo': {
+      const v=$('#f-memo').value.trim(); if(!v){ $('#f-memo').focus(); break }
+      const t=S.tasks[S.sheet.id]; const notes=[...(t.notes||[]),{at:nowIso(),text:v}];
+      $('#f-memo').value=''; patch('tasks',S.sheet.id,{notes,updatedAt:nowIso()}); toast('メモを記録しました'); break }
+    case 'rmmemo': { const t=S.tasks[S.sheet.id]; const notes=(t.notes||[]).filter((_,i)=>i!==+el.dataset.i);
+      patch('tasks',S.sheet.id,{notes,updatedAt:nowIso()}); break }
+    case 'create': {
+      const d=S.sheet.draft; const title=$('#f-title').value.trim();
+      if(!title){ $('#f-title').focus(); toast('内容を入力してください'); break }
+      const memo=$('#f-memo').value.trim(); const now=nowIso();
+      const data={title,projectId:$('#f-proj').value,status:d.status,priority:d.priority,due:$('#f-due').value,
+        notes:memo?[{at:now,text:memo}]:[],createdAt:now,updatedAt:now,order:Date.now()};
+      closeSheet(); put('tasks',uid('t'),data); toast('タスクを追加しました'); break }
+    case 'delask': S.delConfirm=true; renderSheetParts(); break;
+    case 'delcancel': S.delConfirm=false; renderSheetParts(); break;
+    case 'deltask': { const tid=S.sheet.id; closeSheet(); remove('tasks',tid); toast('削除しました'); break }
+    case 'collapse': S.collapsed[pid]=!S.collapsed[pid]; render(); break;
+    case 'doneopen': S.doneOpen[pid]=!S.doneOpen[pid]; render(); break;
+    case 'projmenu': S.editProj=S.editProj===pid?null:pid; S.projDel=false; render(); break;
+    case 'projdelask': S.projDel=true; render(); break;
+    case 'projdelcancel': S.projDel=false; render(); break;
+    case 'saveproj': { const name=$('#ep-name').value.trim(); if(!name){ toast('名前を入力してください'); break }
+      S.editProj=null; patch('projects',pid,{name,group:$('#ep-group').value}); break }
+    case 'delproj': { S.editProj=null; S.projDel=false;
+      for(const t of taskList().filter(t=>t.projectId===pid)) delete S.tasks[t.id];
+      remove('projects',pid); toast('プロジェクトを削除しました'); break }
+    case 'addproj': { const name=$('#np-name').value.trim(); if(!name){ $('#np-name').focus(); break }
+      const group=$('#np-group').value; const order=Math.max(0,...projList().filter(p=>p.group===group).map(p=>p.order||0))+1;
+      put('projects',uid('p'),{name,group,order}); toast('プロジェクトを追加しました'); break }
+    case 'backup': S.pendingImport=null; openBackup(); break;
+    case 'export': doExport(); break;
+    case 'import': $('#importFile').click(); break;
+    case 'importcancel': S.pendingImport=null; openBackup(); break;
+    case 'importok': { const o=S.pendingImport.data; S.projects=o.projects; S.tasks=o.tasks; S.pendingImport=null;
+      save(); closeSheet(); render(); toast('バックアップを読み込みました'); break }
+  }
+});
+document.addEventListener('change',e=>{
+  if(e.target.id==='showDone'){ S.showDone=e.target.checked; render() }
+  if(!S.sheet||S.sheet.mode==='backup') return;
+  if(e.target.id==='f-title'){ const v=e.target.value.trim(); if(S.sheet.mode==='new') S.sheet.draft.title=v; else if(v) editField({title:v}) }
+  if(e.target.id==='f-proj') editField({projectId:e.target.value});
+  if(e.target.id==='f-due') editField({due:e.target.value});
+});
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&S.sheet) closeSheet() });
+
+/* ---------- boot ---------- */
+function paintToday(){ const d=new Date(); $('#today').textContent=`${d.getFullYear()}.${pad(d.getMonth()+1)}.${pad(d.getDate())} ${'日月火水木金土'[d.getDay()]}` }
+paintToday();
+load(); render();
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden){ paintToday(); if(!S.sheet) render() } });
+try{ navigator.storage&&navigator.storage.persist&&navigator.storage.persist() }catch(e){}
+if('serviceWorker' in navigator) window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+}
+</script>
+</body>
+</html>
