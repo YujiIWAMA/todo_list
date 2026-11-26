@@ -1,6 +1,6 @@
 // 研究タスク帳 service worker: makes the app open instantly and work offline.
 // When you change index.html, bump VERSION so phones pick up the new files.
-const VERSION = 'v1';
+const VERSION = 'v2';
 const APP_CACHE = 'rtasks-app-' + VERSION;
 const FONT_CACHE = 'rtasks-fonts';
 const APP_FILES = [
