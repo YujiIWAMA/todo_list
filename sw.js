@@ -1,27 +1,43 @@
 // 研究タスク帳 service worker: makes the app open instantly and work offline.
 // When you change index.html, bump VERSION so phones pick up the new files.
-const VERSION = 'v2';
+const VERSION = 'v3';
 const APP_CACHE = 'rtasks-app-' + VERSION;
 const FONT_CACHE = 'rtasks-fonts';
 const APP_FILES = [
   './',
-  './index.html',
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/apple-touch-icon.png'
 ];
 
+// Hosts like Cloudflare Pages redirect /index.html to /. A redirected response
+// must never be handed back for a page load, so store a clean copy instead.
+async function clean(res) {
+  if (!res.redirected) return res;
+  const body = await res.blob();
+  return new Response(body, { status: res.status, statusText: res.statusText, headers: res.headers });
+}
+
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(APP_CACHE).then(c => c.addAll(APP_FILES)).then(() => self.skipWaiting()));
+  e.waitUntil((async () => {
+    const c = await caches.open(APP_CACHE);
+    await Promise.all(APP_FILES.map(async u => {
+      try {
+        const r = await fetch(u, { cache: 'reload' });
+        if (r.ok) await c.put(u, await clean(r));
+      } catch (err) {}
+    }));
+    await self.skipWaiting();
+  })());
 });
 
 self.addEventListener('activate', e => {
-  e.waitUntil(
-    caches.keys()
-      .then(keys => Promise.all(keys.filter(k => k.startsWith('rtasks-app-') && k !== APP_CACHE).map(k => caches.delete(k))))
-      .then(() => self.clients.claim())
-  );
+  e.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(keys.filter(k => k.startsWith('rtasks-app-') && k !== APP_CACHE).map(k => caches.delete(k)));
+    await self.clients.claim();
+  })());
 });
 
 self.addEventListener('fetch', e => {
@@ -44,13 +60,18 @@ self.addEventListener('fetch', e => {
   if (url.origin !== self.location.origin) return;
 
   // App files: show the saved copy immediately, refresh it in the background
-  e.respondWith(caches.open(APP_CACHE).then(async c => {
-    const key = req.mode === 'navigate' ? './index.html' : req;
+  const isPage = req.mode === 'navigate';
+  e.respondWith((async () => {
+    const c = await caches.open(APP_CACHE);
+    const key = isPage ? './' : req;
     const hit = await c.match(key, { ignoreSearch: true });
-    const refresh = fetch(req).then(res => {
-      if (res.ok) c.put(key, res.clone());
-      return res;
-    }).catch(() => hit);
-    return hit || refresh;
-  }));
+    const refresh = fetch(isPage ? './' : req).then(async res => {
+      const ok = await clean(res);
+      if (ok.ok) await c.put(key, ok.clone());
+      return ok;
+    });
+    if (hit && !hit.redirected) { refresh.catch(() => {}); return hit; }
+    try { return await refresh; }
+    catch (err) { return hit || Response.error(); }
+  })());
 });
